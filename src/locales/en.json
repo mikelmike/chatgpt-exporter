@@ -69,5 +69,14 @@
   "Export Skipped Message": "{{n}} conversations failed after repeated retries and are missing from the export:",
   "List Rate Limited Wait": "Rate limited by the API · wait {{n}}s and try again",
   "List Rate Limited": "Rate limited by the API · try again in a moment",
-  "List Load Failed": "Failed to load conversations"
+  "List Load Failed": "Failed to load conversations",
+  "All Projects PDF": "All Projects → PDF (ZIP)",
+  "Projects Export Loading": "Loading projects…",
+  "Projects Export Progress": "Project {{project}} ({{p}}/{{pt}}) · chat {{c}}/{{ct}}",
+  "Projects Export Rate Limited": "ChatGPT asked to slow down · waiting {{n}}s",
+  "Projects Export Packing": "Packing ZIP…",
+  "Projects Export Done": "Done: {{projects}} projects, {{chats}} chats, {{files}} files",
+  "Projects Export Errors": "{{n}} items failed, see _errors.txt in the ZIP",
+  "Projects Export None": "No projects found",
+  "Projects Export Failed": "Export failed: {{error}}"
 }

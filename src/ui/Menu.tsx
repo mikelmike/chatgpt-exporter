@@ -4,6 +4,7 @@ import { exportToHtml } from '../exporter/html'
 import { exportToPng } from '../exporter/image'
 import { exportToJson, exportToOoba, exportToTavern } from '../exporter/json'
 import { exportToMarkdown } from '../exporter/markdown'
+import { exportAllProjectsToPdf } from '../exporter/projects'
 import { exportToText } from '../exporter/text'
 import { useWindowResize } from '../hooks/useWindowResize'
 import { Dialog } from './Dialog'
@@ -224,6 +225,12 @@ function MenuInner({ container }: { container: HTMLDivElement }) {
                     />
                 </Dialog>
 
+                <MenuItem
+                    text={t('All Projects PDF')}
+                    icon={IconZip}
+                    className="ce-row-full"
+                    onClick={exportAllProjectsToPdf}
+                />
                 <MenuItem
                     text={t('Export All')}
                     icon={IconZip}

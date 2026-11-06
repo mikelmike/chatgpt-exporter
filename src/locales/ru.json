@@ -69,5 +69,14 @@
   "Export Skipped Message": "{{n}} разговоров не удалось загрузить после нескольких попыток, они отсутствуют в экспорте:",
   "List Rate Limited Wait": "Слишком много запросов к API · подождите {{n}} с и попробуйте снова",
   "List Rate Limited": "Слишком много запросов к API · попробуйте чуть позже",
-  "List Load Failed": "Не удалось загрузить беседы"
+  "List Load Failed": "Не удалось загрузить беседы",
+  "All Projects PDF": "Все проекты → PDF (ZIP)",
+  "Projects Export Loading": "Загружаю список проектов…",
+  "Projects Export Progress": "Проект {{project}} ({{p}}/{{pt}}) · чат {{c}}/{{ct}}",
+  "Projects Export Rate Limited": "ChatGPT просит подождать · {{n}} с",
+  "Projects Export Packing": "Собираю ZIP…",
+  "Projects Export Done": "Готово: проектов {{projects}}, чатов {{chats}}, файлов {{files}}",
+  "Projects Export Errors": "Не скачалось: {{n}}, список в _errors.txt внутри ZIP",
+  "Projects Export None": "Проекты не найдены",
+  "Projects Export Failed": "Экспорт не удался: {{error}}"
 }

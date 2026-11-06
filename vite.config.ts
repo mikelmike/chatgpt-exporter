@@ -63,6 +63,8 @@ export default defineConfig({
                     ['jszip', cdn.jsdelivr('JSZip', 'dist/jszip.min.js')],
                     // SnapDOM's IIFE exposes its named export as window.snapdom.
                     ['@zumer/snapdom', cdn.jsdelivr('window', 'dist/snapdom.js')],
+                    ['pdfmake/build/pdfmake', cdn.jsdelivr('pdfMake', 'build/pdfmake.min.js')],
+                    ['pdfmake/build/vfs_fonts', cdn.jsdelivr('pdfMake.vfs', 'build/vfs_fonts.js')],
                 ],
                 // Serialized into the bundle and run in the page, so it must be self-contained.
                 cssSideEffects: (css: string) => {

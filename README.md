@@ -22,6 +22,21 @@ English &nbsp;&nbsp;|&nbsp;&nbsp; [Français](./README_FR.md) &nbsp;&nbsp;|&nbsp
   <img width="960" alt="The ChatGPT Exporter menu opened from its icon in the ChatGPT sidebar" src="./docs/readme/hero-en-light.png">
 </picture>
 
+## One-click export of all ChatGPT Projects (this fork)
+
+Menu → **All Projects → PDF (ZIP)**. No dialogs: it uses the ChatGPT session already open in the browser and downloads `chatgpt-projects-YYYY-MM-DD.zip`:
+
+```text
+<Project name>/
+├── instructions.txt           project instructions (if any)
+├── files/                     files uploaded to the project
+├── <Chat title>.pdf           one PDF per chat
+└── attachments/<Chat title>/  files attached inside that chat
+_errors.txt                    only if something could not be downloaded
+```
+
+A broken chat or file does not stop the export, it is listed in `_errors.txt`. Progress is shown in the bottom-right corner. Emoji are dropped from the PDFs (the embedded Roboto font has no emoji glyphs).
+
 ## Install
 
 ### Prerequisites

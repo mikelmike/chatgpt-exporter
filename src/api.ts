@@ -370,7 +370,7 @@ export interface ApiConversations {
 /// "Gizmos" are what OpenAI calls "projects" or other GPTs in the UI
 export interface ApiGizmo {
     // weird nesting but ok
-    gizmo: { gizmo: ApiProjectInfo }
+    gizmo: { gizmo: ApiProjectInfo, files?: ApiProjectFile[] }
     conversations: { itmes: ApiConversationItem[] }
 }
 
@@ -378,7 +378,7 @@ export interface ApiProjectInfo {
     id: string
     organization_id: string
     display: { name: string, description: string }
-    // todo: support exporting project context
+    instructions?: string | null
 }
 
 interface ApiAccountsCheckAccountDetail {
@@ -663,7 +663,7 @@ async function fetchConversations(offset = 0, limit = 20, project: string | null
     return fetchApi(url)
 }
 
-async function fetchProjectConversations(project: string, cursor: string | number = 0, limit = 20): Promise<ApiConversations> {
+export async function fetchProjectConversations(project: string, cursor: string | number = 0, limit = 20): Promise<ApiConversations> {
     const url = projectConversationsApi(project, cursor, limit)
     const { items, cursor: nextCursor } = await fetchApi<{ items: ApiConversationItem[], cursor: string | null }>(url)
     return {
@@ -1239,4 +1239,46 @@ function attachThinkingToNodes(
         const target = resultNodes.find(n => n.id === targetNodeId)
         if (target) target.thinking = thinking
     }
+}
+
+export interface ApiProjectFile {
+    id?: string
+    file_id?: string
+    name?: string
+    type?: string
+    size?: number
+}
+
+export interface ProjectWithFiles {
+    info: ApiProjectInfo
+    files: ApiProjectFile[]
+}
+
+/** Like fetchProjects, but keeps the files listed for each project */
+export async function fetchProjectsWithFiles(): Promise<ProjectWithFiles[]> {
+    let cursor: number | null = null
+    const projects: ProjectWithFiles[] = []
+    while (true) {
+        const page: { cursor?: number | null, items: ApiGizmo[] } = await fetchApi(projectsApi(cursor))
+        const { items, cursor: nextCursor = null } = page
+        for (const item of items) {
+            const info = item.gizmo?.gizmo
+            if (info?.id) projects.push({ info, files: item.gizmo.files ?? [] })
+        }
+        cursor = nextCursor
+        if (nextCursor === null) break
+    }
+    return projects
+}
+
+/**
+ * Downloads a stored file. Project files need `gizmo_id`, chat attachments `conversation_id`.
+ */
+export async function downloadFileById(fileId: string, query: Record<string, string> = {}): Promise<{ blob: Blob, fileName: string | null }> {
+    const details = await fetchApi<ApiFileDownload>(urlcat(apiUrl, '/files/download/:id', { id: fileId, ...query }))
+    if (details.status === 'error') throw new Error(details.error_message || details.error_code)
+    if (!details.download_url) throw new Error('No download url')
+    const response = await fetch(details.download_url)
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    return { blob: await response.blob(), fileName: details.file_name }
 }

@@ -109,7 +109,7 @@ function generateZip(zip: JSZip) {
     })
 }
 
-function conversationToMarkdown(conversation: ConversationResult, metaList: ExportMeta[] | undefined, imageMode: ImageMode) {
+export function conversationToMarkdown(conversation: ConversationResult, metaList: ExportMeta[] | undefined, imageMode: ImageMode) {
     const { id, title, conversationNodes } = conversation
     const source = `${baseUrl}/c/${id}`
 
