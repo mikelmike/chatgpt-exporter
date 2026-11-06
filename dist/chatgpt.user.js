@@ -28,6 +28,8 @@
 // @match              https://chatgpt.com/share/*/continue
 // @require            https://cdn.jsdelivr.net/npm/jszip@3.9.1/dist/jszip.min.js
 // @require            https://cdn.jsdelivr.net/npm/@zumer/snapdom@2.24.10/dist/snapdom.js
+// @require            https://cdn.jsdelivr.net/npm/pdfmake@0.2.23/build/pdfmake.min.js
+// @require            https://cdn.jsdelivr.net/npm/pdfmake@0.2.23/build/vfs_fonts.js
 // @grant              GM_deleteValue
 // @grant              GM_getValue
 // @grant              GM_setValue
@@ -35,7 +37,7 @@
 // @run-at             document-end
 // ==/UserScript==
 
-(function(jszip, _zumer_snapdom) {
+(function(jszip, _zumer_snapdom, pdfmake_build_pdfmake, pdfmake_build_vfs_fonts) {
 	"use strict";
 	var __create$1 = Object.create;
 	var __defProp$1 = Object.defineProperty;
@@ -58,6 +60,8 @@
 		enumerable: true
 	}) : target, mod));
 	jszip = __toESM$1(jszip);
+	pdfmake_build_pdfmake = __toESM$1(pdfmake_build_pdfmake);
+	pdfmake_build_vfs_fonts = __toESM$1(pdfmake_build_vfs_fonts);
 	var s$2 = new Set();
 	var _css = async (t) => {
 		if (s$2.has(t)) return;
@@ -1070,7 +1074,7 @@
 	}
 	function shouldSkipMessageInExport(message) {
 		if (!message || !message.content) return true;
-		if (message.recipient !== "all") return true;
+		if (message.recipient != null && message.recipient !== "all") return true;
 		if (message.content.content_type === "thoughts") return true;
 		if (message.content.content_type === "reasoning_recap") return true;
 		if (message.metadata?.is_visually_hidden_from_conversation) return true;
@@ -1226,6 +1230,37 @@
 			const target = resultNodes.find((n) => n.id === targetNodeId);
 			if (target) target.thinking = thinking;
 		}
+	}
+	async function fetchProjectsWithFiles() {
+		let cursor = null;
+		const projects = [];
+		while (true) {
+			const { items, cursor: nextCursor = null } = await fetchApi(projectsApi(cursor));
+			for (const item of items) {
+				const info = item.gizmo?.gizmo;
+				if (info?.id) projects.push({
+					info,
+					files: item.gizmo.files ?? []
+				});
+			}
+			cursor = nextCursor;
+			if (nextCursor === null) break;
+		}
+		return projects;
+	}
+	async function downloadFileById(fileId, query = {}) {
+		const details = await fetchApi(urlcat(apiUrl, "/files/download/:id", {
+			id: fileId,
+			...query
+		}));
+		if (details.status === "error") throw new Error(details.error_message || details.error_code);
+		if (!details.download_url) throw new Error("No download url");
+		const response = await fetch(details.download_url);
+		if (!response.ok) throw new Error(`HTTP ${response.status}`);
+		return {
+			blob: await response.blob(),
+			fileName: details.file_name
+		};
 	}
 	var t$1;
 	var r;
@@ -1696,7 +1731,16 @@
 		"Export Skipped Message": "{{n}} conversations failed after repeated retries and are missing from the export:",
 		"List Rate Limited Wait": "Rate limited by the API · wait {{n}}s and try again",
 		"List Rate Limited": "Rate limited by the API · try again in a moment",
-		"List Load Failed": "Failed to load conversations"
+		"List Load Failed": "Failed to load conversations",
+		"All Projects PDF": "All Projects → PDF (ZIP)",
+		"Projects Export Loading": "Loading projects…",
+		"Projects Export Progress": "Project {{project}} ({{p}}/{{pt}}) · chat {{c}}/{{ct}}",
+		"Projects Export Rate Limited": "ChatGPT asked to slow down · waiting {{n}}s",
+		"Projects Export Packing": "Packing ZIP…",
+		"Projects Export Done": "Done: {{projects}} projects, {{chats}} chats, {{files}} files",
+		"Projects Export Errors": "{{n}} items failed, see _errors.txt in the ZIP",
+		"Projects Export None": "No projects found",
+		"Projects Export Failed": "Export failed: {{error}}"
 	};
 	var es_default = {
 		title: "ChatGPT Exporter",
@@ -2061,7 +2105,16 @@
 		"Export Skipped Message": "{{n}} разговоров не удалось загрузить после нескольких попыток, они отсутствуют в экспорте:",
 		"List Rate Limited Wait": "Слишком много запросов к API · подождите {{n}} с и попробуйте снова",
 		"List Rate Limited": "Слишком много запросов к API · попробуйте чуть позже",
-		"List Load Failed": "Не удалось загрузить беседы"
+		"List Load Failed": "Не удалось загрузить беседы",
+		"All Projects PDF": "Все проекты → PDF (ZIP)",
+		"Projects Export Loading": "Загружаю список проектов…",
+		"Projects Export Progress": "Проект {{project}} ({{p}}/{{pt}}) · чат {{c}}/{{ct}}",
+		"Projects Export Rate Limited": "ChatGPT просит подождать · {{n}} с",
+		"Projects Export Packing": "Собираю ZIP…",
+		"Projects Export Done": "Готово: проектов {{projects}}, чатов {{chats}}, файлов {{files}}",
+		"Projects Export Errors": "Не скачалось: {{n}}, список в _errors.txt внутри ZIP",
+		"Projects Export None": "Проекты не найдены",
+		"Projects Export Failed": "Экспорт не удался: {{error}}"
 	};
 	var tr_default = {
 		title: "ChatGPT Exporter",
@@ -8983,7 +9036,7 @@
 		exit();
 		return value;
 	}
-	function paragraph(node, _, state, info) {
+	function paragraph$1(node, _, state, info) {
 		const exit = state.enter("paragraph");
 		const subexit = state.enter("phrasing");
 		const value = state.containerPhrasing(node, info);
@@ -9059,7 +9112,7 @@
 		linkReference,
 		list,
 		listItem,
-		paragraph,
+		paragraph: paragraph$1,
 		root,
 		strong,
 		text: text$1,
@@ -12319,6 +12372,510 @@
 		if (!body) return "";
 		return `<details>\n<summary>${durationLabel}</summary>\n\n${body}\n\n</details>\n\n`;
 	}
+	if (pdfmake_build_vfs_fonts.default && typeof pdfmake_build_vfs_fonts.default === "object" && "Roboto-Regular.ttf" in pdfmake_build_vfs_fonts.default) pdfmake_build_pdfmake.default.vfs = pdfmake_build_vfs_fonts.default;
+	var CONTENT_WIDTH = 515.28;
+	var PDF_IMAGE = /^data:image\/(?:png|jpe?g);base64,/i;
+	function clean(value) {
+		return value.replace(/\p{Extended_Pictographic}|\u200D|\uFE0F/gu, "");
+	}
+	function stripTags(html) {
+		return html.replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&#0?39;/g, "'").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&");
+	}
+	function inlines(nodes, style = {}) {
+		return nodes.flatMap((node) => {
+			switch (node.type) {
+				case "text": return [{
+					...style,
+					text: clean(node.value)
+				}];
+				case "strong": return inlines(node.children, {
+					...style,
+					bold: true
+				});
+				case "emphasis": return inlines(node.children, {
+					...style,
+					italics: true
+				});
+				case "delete": return inlines(node.children, {
+					...style,
+					decoration: "lineThrough"
+				});
+				case "inlineCode": return [{
+					...style,
+					text: clean(node.value),
+					background: "#eeeeee",
+					color: "#b4235a"
+				}];
+				case "link": return inlines(node.children, {
+					...style,
+					link: node.url,
+					color: "#1a5fb4"
+				});
+				case "break": return [{
+					...style,
+					text: "\n"
+				}];
+				case "html": return [{
+					...style,
+					text: clean(stripTags(node.value))
+				}];
+				case "image": return [{
+					...style,
+					text: `[${node.alt || "image"}]`
+				}];
+				case "footnoteReference": return [{
+					...style,
+					text: `[${node.label ?? node.identifier}]`
+				}];
+				default: return "children" in node ? inlines(node.children, style) : [];
+			}
+		});
+	}
+	function paragraph(children) {
+		const result = [];
+		let run = [];
+		const flush = () => {
+			const text = inlines(run);
+			if (text.some((part) => part.text.trim())) result.push({
+				text,
+				margin: [
+					0,
+					0,
+					0,
+					6
+				]
+			});
+			run = [];
+		};
+		for (const child of children) if (child.type === "image" && PDF_IMAGE.test(child.url)) {
+			flush();
+			result.push({
+				image: child.url,
+				fit: [CONTENT_WIDTH, 600],
+				margin: [
+					0,
+					2,
+					0,
+					8
+				]
+			});
+		} else run.push(child);
+		flush();
+		return result;
+	}
+	var codeLayout = {
+		hLineWidth: () => 0,
+		vLineWidth: () => 0,
+		fillColor: () => "#f4f4f4",
+		paddingLeft: () => 6,
+		paddingRight: () => 6,
+		paddingTop: () => 4,
+		paddingBottom: () => 4
+	};
+	function blocks(nodes) {
+		return nodes.flatMap((node) => {
+			switch (node.type) {
+				case "heading": return [{
+					text: inlines(node.children),
+					style: `h${Math.min(node.depth, 4)}`
+				}];
+				case "paragraph": return paragraph(node.children);
+				case "code": return [{
+					table: {
+						widths: ["*"],
+						body: [[{
+							text: clean(node.value),
+							fontSize: 8.5,
+							preserveLeadingSpaces: true
+						}]]
+					},
+					layout: codeLayout,
+					margin: [
+						0,
+						2,
+						0,
+						8
+					]
+				}];
+				case "blockquote": return [{
+					stack: blocks(node.children),
+					margin: [
+						12,
+						0,
+						0,
+						6
+					],
+					color: "#555555"
+				}];
+				case "list": {
+					const items = node.children.map((item) => ({ stack: blocks(item.children) }));
+					if (items.length === 0) return [];
+					return node.ordered ? [{
+						ol: items,
+						start: node.start ?? 1,
+						margin: [
+							0,
+							0,
+							0,
+							6
+						]
+					}] : [{
+						ul: items,
+						margin: [
+							0,
+							0,
+							0,
+							6
+						]
+					}];
+				}
+				case "table": {
+					const body = node.children.map((row, index) => row.children.map((cell) => ({
+						text: cell.children.length ? inlines(cell.children) : "",
+						bold: index === 0
+					})));
+					const columns = Math.max(0, ...body.map((row) => row.length));
+					if (columns === 0) return [];
+					body.forEach((row) => {
+						while (row.length < columns) row.push({
+							text: "",
+							bold: false
+						});
+					});
+					return [{
+						table: {
+							headerRows: 1,
+							widths: Array.from({ length: columns }, () => "*"),
+							body
+						},
+						layout: "lightHorizontalLines",
+						fontSize: 9,
+						margin: [
+							0,
+							2,
+							0,
+							8
+						]
+					}];
+				}
+				case "thematicBreak": return [{
+					canvas: [{
+						type: "line",
+						x1: 0,
+						y1: 0,
+						x2: CONTENT_WIDTH,
+						y2: 0,
+						lineWidth: .5,
+						lineColor: "#cccccc"
+					}],
+					margin: [
+						0,
+						6,
+						0,
+						6
+					]
+				}];
+				case "html": {
+					const text = clean(stripTags(node.value)).trim();
+					return text ? [{
+						text,
+						margin: [
+							0,
+							0,
+							0,
+							6
+						],
+						color: "#555555"
+					}] : [];
+				}
+				case "footnoteDefinition": return [{
+					stack: [{ text: `[${node.label ?? node.identifier}]` }, ...blocks(node.children)],
+					fontSize: 8
+				}];
+				default: return "children" in node ? blocks(node.children) : [];
+			}
+		});
+	}
+	function markdownToPdfDefinition(markdown) {
+		return {
+			pageSize: "A4",
+			pageMargins: [
+				40,
+				40,
+				40,
+				40
+			],
+			content: blocks(fromMarkdown(markdown).children),
+			defaultStyle: {
+				font: "Roboto",
+				fontSize: 10,
+				lineHeight: 1.2
+			},
+			styles: {
+				h1: {
+					fontSize: 18,
+					bold: true,
+					margin: [
+						0,
+						0,
+						0,
+						10
+					]
+				},
+				h2: {
+					fontSize: 15,
+					bold: true,
+					margin: [
+						0,
+						8,
+						0,
+						6
+					]
+				},
+				h3: {
+					fontSize: 12.5,
+					bold: true,
+					margin: [
+						0,
+						8,
+						0,
+						4
+					]
+				},
+				h4: {
+					fontSize: 11,
+					bold: true,
+					color: "#10a37f",
+					margin: [
+						0,
+						12,
+						0,
+						4
+					]
+				}
+			}
+		};
+	}
+	function markdownToPdf(markdown) {
+		return new Promise((resolve, reject) => {
+			try {
+				pdfmake_build_pdfmake.default.createPdf(markdownToPdfDefinition(markdown)).getBlob(resolve);
+			} catch (error) {
+				reject(error);
+			}
+		});
+	}
+	async function toPdfImage(src) {
+		if (!src.startsWith("data:image/") || PDF_IMAGE.test(src)) return null;
+		const bitmap = await createImageBitmap(await (await fetch(src)).blob());
+		const canvas = document.createElement("canvas");
+		canvas.width = bitmap.width;
+		canvas.height = bitmap.height;
+		canvas.getContext("2d")?.drawImage(bitmap, 0, 0);
+		bitmap.close();
+		return canvas.toDataURL("image/png");
+	}
+	var REQUEST_GAP_MS = 300;
+	var MAX_ATTEMPTS = 3;
+	var MAX_RATE_LIMIT_WAITS = 20;
+	function errorText(error) {
+		return error instanceof Error ? error.message : String(error);
+	}
+	function safeName(name, fallback) {
+		return (0, import_sanitize_filename.default)(name ?? "").trim().slice(0, 120) || (0, import_sanitize_filename.default)(fallback).slice(0, 120) || "untitled";
+	}
+	function uniqueName(taken, name) {
+		const dot = name.lastIndexOf(".");
+		const base = dot > 0 ? name.slice(0, dot) : name;
+		const ext = dot > 0 ? name.slice(dot) : "";
+		let candidate = name;
+		for (let i = 2; taken.has(candidate.toLowerCase()); i++) candidate = `${base} (${i})${ext}`;
+		taken.add(candidate.toLowerCase());
+		return candidate;
+	}
+	async function withRetry(task, report) {
+		let failures = 0;
+		let waits = 0;
+		while (true) try {
+			return await task();
+		} catch (error) {
+			if (error instanceof RateLimitError && waits < MAX_RATE_LIMIT_WAITS) {
+				waits++;
+				report("Projects Export Rate Limited", { n: Math.ceil(error.retryAfterMs / 1e3) });
+				await sleep(error.retryAfterMs);
+				continue;
+			}
+			if (error instanceof RateLimitError || ++failures >= MAX_ATTEMPTS) throw error;
+			await sleep(1e3 * 2 ** failures);
+		}
+	}
+	async function fetchAllProjectConversations(projectId, report) {
+		const items = [];
+		const seen = new Set();
+		let cursor = 0;
+		while (true) {
+			const page = await withRetry(() => fetchProjectConversations(projectId, cursor, 50), report);
+			for (const item of page.items) {
+				if (seen.has(item.id)) continue;
+				seen.add(item.id);
+				items.push(item);
+			}
+			if (page.items.length === 0 || !page.cursor) break;
+			cursor = page.cursor;
+			await sleep(REQUEST_GAP_MS);
+		}
+		return items;
+	}
+	function fileAttachments(conversation) {
+		const result = new Map();
+		for (const node of Object.values(conversation.mapping ?? {})) for (const attachment of node.message?.metadata?.attachments ?? []) {
+			if (!attachment.id || attachment.mime_type?.startsWith("image/")) continue;
+			result.set(attachment.id, {
+				id: attachment.id,
+				name: attachment.name
+			});
+		}
+		return [...result.values()];
+	}
+	async function buildProjectsPdfZip(report = () => {}) {
+		const zip = new jszip.default();
+		const errors = [];
+		const enableThinking = ScriptStorage.get("exporter:enable_thinking") ?? true;
+		let chats = 0;
+		let files = 0;
+		report("Projects Export Loading");
+		const projects = await withRetry(() => fetchProjectsWithFiles(), report);
+		const projectFolders = new Set();
+		for (const [projectIndex, { info, files: projectFiles }] of projects.entries()) {
+			const projectName = info.display?.name || "Project";
+			const folderName = uniqueName(projectFolders, safeName(projectName, info.id));
+			const folder = zip.folder(folderName);
+			const progress = {
+				project: projectName,
+				p: projectIndex + 1,
+				pt: projects.length,
+				c: 0,
+				ct: 0
+			};
+			report("Projects Export Progress", progress);
+			const instructions = info.instructions?.trim();
+			if (instructions) folder.file("instructions.txt", `${instructions}\n`);
+			const fileNames = new Set();
+			for (const file of projectFiles) {
+				const fileId = file.file_id || file.id;
+				if (!fileId) continue;
+				try {
+					const { blob, fileName } = await withRetry(() => downloadFileById(fileId, { gizmo_id: info.id }), report);
+					folder.file(`files/${uniqueName(fileNames, safeName(file.name || fileName, fileId))}`, await blob.arrayBuffer());
+					files++;
+				} catch (error) {
+					errors.push(`${folderName} / files / ${file.name || fileId}: ${errorText(error)}`);
+				}
+				await sleep(REQUEST_GAP_MS);
+			}
+			let items;
+			try {
+				items = await fetchAllProjectConversations(info.id, report);
+			} catch (error) {
+				errors.push(`${folderName}: ${errorText(error)}`);
+				continue;
+			}
+			const chatNames = new Set();
+			progress.ct = items.length;
+			for (const [chatIndex, item] of items.entries()) {
+				progress.c = chatIndex + 1;
+				report("Projects Export Progress", progress);
+				try {
+					const rawConversation = await withRetry(() => fetchConversation(item.id), report);
+					const withImages = await withImageAssets(rawConversation);
+					await replaceImageSources(withImages, (src) => toPdfImage(src).catch(() => null));
+					const conversation = processConversation(withImages, { enableThinking });
+					const markdown = conversationToMarkdown(conversation, [], "embed");
+					const chatName = uniqueName(chatNames, `${safeName(conversation.title || item.title, item.id)}.pdf`);
+					folder.file(chatName, await (await markdownToPdf(markdown)).arrayBuffer());
+					chats++;
+					const attachmentNames = new Set();
+					for (const attachment of fileAttachments(rawConversation)) {
+						try {
+							const { blob, fileName } = await withRetry(() => downloadFileById(attachment.id, { conversation_id: item.id }), report);
+							const name = uniqueName(attachmentNames, safeName(attachment.name || fileName, attachment.id));
+							folder.file(`attachments/${chatName.replace(/\.pdf$/, "")}/${name}`, await blob.arrayBuffer());
+							files++;
+						} catch (error) {
+							errors.push(`${folderName} / ${chatName} / ${attachment.name || attachment.id}: ${errorText(error)}`);
+						}
+						await sleep(REQUEST_GAP_MS);
+					}
+				} catch (error) {
+					errors.push(`${folderName} / ${item.title || item.id}: ${errorText(error)}`);
+				}
+				await sleep(REQUEST_GAP_MS);
+			}
+		}
+		if (errors.length > 0) zip.file("_errors.txt", `${errors.join("\n")}\n`);
+		report("Projects Export Packing");
+		return {
+			blob: await zip.generateAsync({
+				type: "blob",
+				platform: "UNIX",
+				compression: "DEFLATE",
+				compressionOptions: { level: 9 }
+			}),
+			projects: projects.length,
+			chats,
+			files,
+			errors
+		};
+	}
+	function createToast() {
+		const element = document.createElement("div");
+		element.style.cssText = [
+			"position:fixed",
+			"right:16px",
+			"bottom:16px",
+			"z-index:2147483647",
+			"max-width:380px",
+			"padding:10px 14px",
+			"border-radius:8px",
+			"background:#202123",
+			"color:#fff",
+			"font:13px/1.4 system-ui,sans-serif",
+			"box-shadow:0 4px 16px rgba(0,0,0,.3)",
+			"white-space:pre-wrap"
+		].join(";");
+		document.body.append(element);
+		return {
+			set: (text) => {
+				element.textContent = text;
+			},
+			close: (delay) => setTimeout(() => element.remove(), delay)
+		};
+	}
+	async function exportAllProjectsToPdf() {
+		const toast = createToast();
+		try {
+			const result = await buildProjectsPdfZip((key, options) => toast.set(i18n.t(key, options)));
+			if (result.projects === 0) {
+				toast.set(i18n.t("Projects Export None"));
+				toast.close(6e3);
+				return false;
+			}
+			downloadFile(`chatgpt-projects-${dateStr()}.zip`, "application/zip", result.blob);
+			const done = i18n.t("Projects Export Done", {
+				projects: result.projects,
+				chats: result.chats,
+				files: result.files
+			});
+			toast.set(result.errors.length ? `${done}\n${i18n.t("Projects Export Errors", { n: result.errors.length })}` : done);
+			toast.close(result.errors.length ? 2e4 : 8e3);
+			return true;
+		} catch (error) {
+			console.error(error);
+			toast.set(i18n.t("Projects Export Failed", { error: errorText(error) }));
+			toast.close(2e4);
+			return false;
+		}
+	}
 	function copyToClipboard(text) {
 		try {
 			navigator.clipboard.writeText(text);
@@ -14778,6 +15335,12 @@
 						]
 					}),
 					o(MenuItem, {
+						text: t("All Projects PDF"),
+						icon: IconZip,
+						className: "ce-row-full",
+						onClick: exportAllProjectsToPdf
+					}),
+					o(MenuItem, {
 						text: t("Export All"),
 						icon: IconZip,
 						className: "ce-row-full",
@@ -14972,4 +15535,4 @@
 			insert: (container) => getNavMenuInsertionTarget(target).before(container)
 		}));
 	}
-})(JSZip, window);
+})(JSZip, window, pdfMake, pdfMake.vfs);
